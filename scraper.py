@@ -1,10 +1,12 @@
 """
 Multi-source Job Scraper
-Aggregates listings from free APIs: RemoteOK, Adzuna, Arbeitnow, JSearch
+Aggregates listings from free APIs: RemoteOK, Adzuna, Arbeitnow, JSearch,
+Remotive, We Work Remotely, Himalayas
 """
 import logging
 import os
 import time
+import xml.etree.ElementTree as ET
 
 import requests
 
@@ -54,6 +56,83 @@ def scrape_remoteok(query: str) -> list[dict]:
                 })
     except Exception as exc:
         log.warning("  RemoteOK error: %s", exc)
+    return jobs
+
+
+def scrape_remotive(query: str) -> list[dict]:
+    """Remotive — free, no auth required. Remote jobs only."""
+    jobs = []
+    try:
+        data = _get_with_retry(
+            "https://remotive.com/api/remote-jobs",
+            params={"search": query, "limit": 50},
+        ).json().get("jobs", [])
+        for item in data:
+            jobs.append({
+                "title": item.get("title", ""),
+                "company": item.get("company_name", ""),
+                "url": item.get("url", ""),
+                "description": item.get("description", ""),
+                "tags": item.get("tags", []),
+                "salary_min": None,
+                "salary_max": None,
+                "source": "Remotive",
+                "date": item.get("publication_date", ""),
+            })
+    except Exception as exc:
+        log.warning("  Remotive error: %s", exc)
+    return jobs
+
+
+def scrape_weworkremotely(query: str) -> list[dict]:
+    """We Work Remotely — free RSS feed, no auth required."""
+    jobs = []
+    try:
+        resp = _get_with_retry("https://weworkremotely.com/remote-jobs.rss")
+        root = ET.fromstring(resp.content)
+        query_words = query.lower().split()
+        for item in root.findall(".//item"):
+            title = (item.findtext("title") or "").lower()
+            region = (item.findtext("region") or "").lower()
+            if any(w in title or w in region for w in query_words):
+                jobs.append({
+                    "title": item.findtext("title") or "",
+                    "company": (item.findtext("title") or "").split(" at ")[-1] if " at " in (item.findtext("title") or "") else "",
+                    "url": item.findtext("link") or "",
+                    "description": item.findtext("description") or "",
+                    "tags": [],
+                    "salary_min": None,
+                    "salary_max": None,
+                    "source": "WeWorkRemotely",
+                    "date": item.findtext("pubDate") or "",
+                })
+    except Exception as exc:
+        log.warning("  WeWorkRemotely error: %s", exc)
+    return jobs
+
+
+def scrape_himalayas(query: str) -> list[dict]:
+    """Himalayas — free API, no auth required. Remote jobs."""
+    jobs = []
+    try:
+        data = _get_with_retry(
+            "https://himalayas.app/jobs/api",
+            params={"q": query, "limit": 50},
+        ).json().get("jobs", [])
+        for item in data:
+            jobs.append({
+                "title": item.get("title", ""),
+                "company": item.get("companyName", ""),
+                "url": item.get("applicationLink") or item.get("url", ""),
+                "description": item.get("description", ""),
+                "tags": item.get("skills", []),
+                "salary_min": item.get("salaryMin"),
+                "salary_max": item.get("salaryMax"),
+                "source": "Himalayas",
+                "date": item.get("createdAt", ""),
+            })
+    except Exception as exc:
+        log.warning("  Himalayas error: %s", exc)
     return jobs
 
 
@@ -163,8 +242,12 @@ def scrape_all_sources(query: str) -> list[dict]:
     all_jobs: list[dict] = []
     scrapers = [
         ("RemoteOK", lambda: scrape_remoteok(query)),
-        ("Adzuna", lambda: scrape_adzuna(query)),
+        ("Remotive", lambda: scrape_remotive(query)),
+        ("WeWorkRemotely", lambda: scrape_weworkremotely(query)),
+        ("Himalayas", lambda: scrape_himalayas(query)),
         ("Arbeitnow", lambda: scrape_arbeitnow(query)),
+        ("Adzuna-US", lambda: scrape_adzuna(query, country="us")),
+        ("Adzuna-CA", lambda: scrape_adzuna(query, country="ca")),
         ("JSearch", lambda: scrape_jsearch(query)),
     ]
 
