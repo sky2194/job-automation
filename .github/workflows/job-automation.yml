@@ -26,7 +26,7 @@ jobs:
         run: playwright install chromium --with-deps
 
       - name: Write Google credentials file
-        run: echo '${{ secrets.GOOGLE_SHEETS_CREDS_JSON }}' > credentials.json
+        run: echo '${{ secrets.GOOGLE_SHEETS_CREDS }}' > credentials.json
 
       - name: Run job automation pipeline
         env:
@@ -37,20 +37,19 @@ jobs:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
           LINKEDIN_PASSWORD: ${{ secrets.LINKEDIN_PASSWORD }}
-          INDEED_EMAIL: ${{ secrets.INDEED_EMAIL }}
+          INDEED_EMAIL: yerabatisai26@gmail.com
           GOOGLE_SHEETS_CREDS: credentials.json
-          CANDIDATE_NAME: ${{ secrets.CANDIDATE_NAME }}
-          CANDIDATE_EMAIL: ${{ secrets.CANDIDATE_EMAIL }}
-          CANDIDATE_PHONE: ${{ secrets.CANDIDATE_PHONE }}
-          CANDIDATE_SKILLS: ${{ secrets.CANDIDATE_SKILLS }}
-          CANDIDATE_EXPERIENCE: ${{ secrets.CANDIDATE_EXPERIENCE }}
-          SALARY_MIN: ${{ secrets.SALARY_MIN }}
-          SALARY_MAX: ${{ secrets.SALARY_MAX }}
-          MIN_SCORE: ${{ secrets.MIN_SCORE }}
-          MAX_APPLY: ${{ secrets.MAX_APPLY }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          SHEET_NAME: Job Automation Tracker
+          CANDIDATE_NAME: Sai Koutilya Yerabati
+          CANDIDATE_EMAIL: yerabatisai26@gmail.com
+          CANDIDATE_PHONE: +1-647-697-1009
+          CANDIDATE_SKILLS: Kubernetes,Docker,Terraform,Ansible,Jenkins,GitHub Actions,Python,Bash,Prometheus,Grafana,OpenShift,Helm,ArgoCD,CI/CD,Linux,AWS,SRE,DevOps,ServiceNow,Splunk
+          CANDIDATE_EXPERIENCE: "6"
+          SALARY_MIN: "120000"
+          SALARY_MAX: "160000"
+          BASE_RESUME: resume_base.docx
+          MIN_SCORE: "40"
+          MAX_APPLY: "15"
           HEADLESS: "true"
         run: python main.py
 
