@@ -28,6 +28,9 @@ jobs:
       - name: Write Google credentials file
         run: echo '${{ secrets.GOOGLE_SHEETS_CREDS }}' > credentials.json
 
+      - name: Restore resume file
+        run: echo '${{ secrets.RESUME_PART1 }}${{ secrets.RESUME_PART2 }}' | base64 -d > resume_base.docx
+
       - name: Run job automation pipeline
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
