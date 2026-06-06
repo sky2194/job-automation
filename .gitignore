@@ -1,5 +1,6 @@
 .env
 credentials.json
+resume_base.docx
 jobs_backup.json
 pipeline.log
 resumes/
