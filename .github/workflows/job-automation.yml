@@ -1,0 +1,63 @@
+name: Job Automation
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"   # Every 3 hours
+  workflow_dispatch:          # Manual trigger from GitHub UI
+
+jobs:
+  find-and-apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: playwright install chromium --with-deps
+
+      - name: Write Google credentials file
+        run: echo '${{ secrets.GOOGLE_SHEETS_CREDS_JSON }}' > credentials.json
+
+      - name: Run job automation pipeline
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
+          LINKEDIN_PASSWORD: ${{ secrets.LINKEDIN_PASSWORD }}
+          INDEED_EMAIL: ${{ secrets.INDEED_EMAIL }}
+          GOOGLE_SHEETS_CREDS: credentials.json
+          CANDIDATE_NAME: ${{ secrets.CANDIDATE_NAME }}
+          CANDIDATE_EMAIL: ${{ secrets.CANDIDATE_EMAIL }}
+          CANDIDATE_PHONE: ${{ secrets.CANDIDATE_PHONE }}
+          CANDIDATE_SKILLS: ${{ secrets.CANDIDATE_SKILLS }}
+          CANDIDATE_EXPERIENCE: ${{ secrets.CANDIDATE_EXPERIENCE }}
+          SALARY_MIN: ${{ secrets.SALARY_MIN }}
+          SALARY_MAX: ${{ secrets.SALARY_MAX }}
+          MIN_SCORE: ${{ secrets.MIN_SCORE }}
+          MAX_APPLY: ${{ secrets.MAX_APPLY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          HEADLESS: "true"
+        run: python main.py
+
+      - name: Upload pipeline log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log
+          path: pipeline.log
+          retention-days: 7

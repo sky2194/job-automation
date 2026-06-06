@@ -1,0 +1,11 @@
+.env
+credentials.json
+jobs_backup.json
+pipeline.log
+resumes/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+venv/
+.venv/
