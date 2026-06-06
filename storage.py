@@ -16,15 +16,19 @@ SCOPES = [
 ]
 
 SHEET_HEADERS = [
-    "Date", "Title", "Company", "URL", "Source",
+    "Run #", "Date", "Title", "Company", "URL", "Source",
     "Score", "Reason", "Status", "Cover Letter", "Tags",
+]
+
+RUN_LOG_HEADERS = [
+    "Run #", "Date", "Status", "Jobs Scraped", "Jobs Qualified", "Jobs Applied", "Error",
 ]
 
 _sheet_cache: dict = {}
 
 
 def _get_sheet(api_config: dict):
-    """Return the gspread Spreadsheet object, creating it with headers if needed."""
+    """Return the gspread Spreadsheet object, creating tabs with headers if needed."""
     creds_file = api_config.get("sheets_creds", "credentials.json")
     sheet_name = api_config.get("sheet_name", "Job Automation Tracker")
     cache_key = f"{creds_file}:{sheet_name}"
@@ -42,22 +46,37 @@ def _get_sheet(api_config: dict):
         spreadsheet = gc.open(sheet_name)
     except gspread.SpreadsheetNotFound:
         spreadsheet = gc.create(sheet_name)
-        ws = spreadsheet.sheet1
-        ws.update("A1:J1", [SHEET_HEADERS])
-        ws.format("A1:J1", {"textFormat": {"bold": True}})
         log.info("  Created new Google Sheet: %s", sheet_name)
+
+    # Ensure "Jobs" tab exists
+    try:
+        spreadsheet.worksheet("Jobs")
+    except gspread.WorksheetNotFound:
+        ws = spreadsheet.sheet1
+        ws.update_title("Jobs")
+        ws.update("A1", [SHEET_HEADERS])
+        ws.format("A1:K1", {"textFormat": {"bold": True}})
+
+    # Ensure "Run Log" tab exists
+    try:
+        spreadsheet.worksheet("Run Log")
+    except gspread.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title="Run Log", rows=1000, cols=10)
+        ws.update("A1", [RUN_LOG_HEADERS])
+        ws.format("A1:G1", {"textFormat": {"bold": True}})
 
     _sheet_cache[cache_key] = spreadsheet
     return spreadsheet
 
 
 def save_to_sheets(job: dict, api_config: dict) -> None:
-    """Append a job row to Google Sheets, falling back to local JSON on error."""
+    """Append a job row to the Jobs tab, falling back to local JSON on error."""
     try:
         sheet = _get_sheet(api_config)
-        ws = sheet.sheet1
+        ws = sheet.worksheet("Jobs")
         ws.append_row(
             [
+                job.get("run_number", ""),
                 datetime.now().strftime("%Y-%m-%d %H:%M"),
                 job.get("title", ""),
                 job.get("company", ""),
@@ -74,6 +93,29 @@ def save_to_sheets(job: dict, api_config: dict) -> None:
     except Exception as exc:
         log.warning("  Sheets save failed: %s — saving locally", exc)
         save_local_backup(job)
+
+
+def log_run(api_config: dict, run_number: str, jobs_scraped: int,
+            jobs_qualified: int, jobs_applied: int, error: str = "") -> None:
+    """Append a summary row to the Run Log tab."""
+    status = "failed" if error else "success"
+    try:
+        sheet = _get_sheet(api_config)
+        ws = sheet.worksheet("Run Log")
+        ws.append_row(
+            [
+                run_number,
+                datetime.now().strftime("%Y-%m-%d %H:%M"),
+                status,
+                jobs_scraped,
+                jobs_qualified,
+                jobs_applied,
+                error[:300] if error else "",
+            ],
+            value_input_option="USER_ENTERED",
+        )
+    except Exception as exc:
+        log.warning("  Run log save failed: %s", exc)
 
 
 def get_applied_urls(api_config: dict) -> set[str]:

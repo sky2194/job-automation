@@ -17,7 +17,7 @@ from scraper import scrape_all_sources
 from scorer import score_jobs
 from doc_generator import generate_resume, generate_cover_letter
 from auto_apply import apply_to_job
-from storage import save_to_sheets, get_applied_urls, save_local_backup
+from storage import save_to_sheets, get_applied_urls, save_local_backup, log_run
 from notifier import send_summary_email
 
 # ── Logging setup ─────────────────────────────────
@@ -72,8 +72,9 @@ CONFIG = {
 
 
 def run_pipeline(args):
+    run_number = os.getenv("GITHUB_RUN_NUMBER", "local")
     log.info("=" * 60)
-    log.info("  Job Automation Pipeline — %s", datetime.now().strftime("%Y-%m-%d %H:%M"))
+    log.info("  Job Automation Pipeline — %s  [Run #%s]", datetime.now().strftime("%Y-%m-%d %H:%M"), run_number)
     if args.dry_run:
         log.info("  DRY RUN MODE — no applications will be submitted")
     log.info("=" * 60)
@@ -157,6 +158,7 @@ def run_pipeline(args):
 
             job["applied_date"] = datetime.now().isoformat()
             job["cover_letter"] = cover_letter
+            job["run_number"] = run_number
             results.append(job)
 
             save_to_sheets(job, api_cfg)
@@ -179,6 +181,9 @@ def run_pipeline(args):
     log.info("=" * 60)
     log.info("  Done! Applied to %d/%d qualifying jobs", applied_count, len(qualified))
     log.info("=" * 60)
+
+    if not args.dry_run:
+        log_run(api_cfg, run_number, len(unique_jobs), len(qualified), applied_count)
 
     notify_cfg = CONFIG["notify"]
     if notify_cfg.get("notify_email") and results and not args.dry_run:
