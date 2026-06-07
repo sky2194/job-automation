@@ -154,7 +154,7 @@ def run_pipeline(args):
                 job["status"] = "dry_run"
             else:
                 success = apply_to_job(job, resume_path, cover_letter, candidate)
-                job["status"] = "applied" if success else "failed"
+                job["status"] = "applied" if success else "needs_manual_apply"
 
             job["applied_date"] = datetime.now().isoformat()
             job["cover_letter"] = cover_letter
