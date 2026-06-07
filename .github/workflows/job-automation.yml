@@ -2,7 +2,7 @@ name: Job Automation
 
 on:
   schedule:
-    - cron: "0 */3 * * *"   # Every 3 hours
+    - cron: "0 */6 * * *"   # Every 6 hours (saves Groq tokens)
   workflow_dispatch:          # Manual trigger from GitHub UI
 
 jobs:

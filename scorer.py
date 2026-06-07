@@ -9,11 +9,34 @@ import time
 
 log = logging.getLogger(__name__)
 
+# Title keywords that indicate a DevOps/SRE/Platform role worth scoring
+_RELEVANT_TITLE_KEYWORDS = {
+    "devops", "sre", "site reliability", "platform engineer", "platform engineering",
+    "infrastructure", "cloud engineer", "kubernetes", "k8s", "devsecops",
+    "reliability engineer", "systems engineer", "operations engineer", "mlops",
+    "cloudops", "backend engineer", "software engineer", "software developer",
+    "staff engineer", "solutions architect", "cloud architect", "build engineer",
+    "release engineer", "automation engineer", "devops engineer",
+}
+
+# High-value DevOps skills for keyword fallback scoring
+_DEVOPS_SKILLS = {
+    "kubernetes", "docker", "terraform", "ansible", "jenkins", "github actions",
+    "prometheus", "grafana", "helm", "argocd", "openshift", "ci/cd",
+    "aws", "linux", "bash", "sre", "devops", "python",
+}
+
+
+def _is_devops_relevant(job: dict) -> bool:
+    """Return True if title/tags suggest a DevOps/SRE/Platform role."""
+    title = job.get("title", "").lower()
+    tags = " ".join(job.get("tags", [])).lower()
+    return any(kw in title or kw in tags for kw in _RELEVANT_TITLE_KEYWORDS)
+
 
 def _extract_json(text: str) -> dict:
     """Extract JSON from LLM response that may have markdown fences."""
     text = text.strip()
-    # Strip ```json ... ``` or ``` ... ```
     match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
     if match:
         text = match.group(1)
@@ -84,24 +107,56 @@ Return: {{"score": <int>, "reason": "<brief>", "key_matches": ["skill1"]}}"""
 
 
 def keyword_score(job: dict, candidate: dict) -> dict:
-    """Simple keyword matching — no API needed."""
-    text = f"{job['title']} {job.get('description', '')} {' '.join(job.get('tags', []))}".lower()
-    matches = [s for s in candidate["skills"] if s.lower() in text]
-    score = min(100, len(matches) * 20)
+    """DevOps-aware keyword matching used when AI scoring is unavailable."""
+    title = job.get("title", "").lower()
+
+    # If the title isn't a DevOps/SRE role at all, score it very low
+    if not _is_devops_relevant(job):
+        return {
+            "score": 5,
+            "reason": "Job title not relevant to DevOps/SRE/Platform Engineering",
+            "key_matches": [],
+        }
+
+    text = f"{title} {job.get('description', '')} {' '.join(job.get('tags', []))}".lower()
+
+    # Match only DevOps-specific skills (not generic skills that appear everywhere)
+    candidate_devops_skills = _DEVOPS_SKILLS & {s.lower() for s in candidate.get("skills", [])}
+    matches = [s for s in candidate_devops_skills if s in text]
+
+    # Require at least 2 specific DevOps skill matches to avoid false positives
+    if len(matches) < 2:
+        score = len(matches) * 10  # 0 or 10 — below threshold
+    else:
+        score = min(80, len(matches) * 15)  # cap at 80 for keyword match
+
     return {
         "score": score,
-        "reason": f"Keyword match: {len(matches)} skills found ({', '.join(matches[:3])})",
-        "key_matches": matches,
+        "reason": f"Keyword match ({len(matches)} DevOps skills): {', '.join(list(matches)[:4])}",
+        "key_matches": list(matches),
     }
 
 
 def score_jobs(jobs: list[dict], candidate: dict, api_config: dict) -> list[dict]:
-    """Score all jobs with AI; fall back gracefully on any error."""
+    """Score all jobs with AI; pre-filter irrelevant roles to conserve tokens."""
     scored = []
     groq_key = api_config.get("groq_key", "")
     gemini_key = api_config.get("gemini_key", "")
 
-    for i, job in enumerate(jobs):
+    # Pre-filter: skip obviously irrelevant jobs without burning AI tokens
+    relevant_jobs, skipped = [], []
+    for job in jobs:
+        if _is_devops_relevant(job):
+            relevant_jobs.append(job)
+        else:
+            job.update({"score": 0, "reason": "Not relevant to DevOps/SRE/Platform Engineering", "key_matches": []})
+            skipped.append(job)
+
+    if skipped:
+        log.info("  Pre-filtered %d irrelevant jobs (saved AI tokens)", len(skipped))
+    log.info("  Sending %d relevant jobs to AI scorer", len(relevant_jobs))
+
+    for i, job in enumerate(relevant_jobs):
         try:
             if groq_key:
                 result = get_groq_score(job, candidate, groq_key)
@@ -122,6 +177,7 @@ def score_jobs(jobs: list[dict], candidate: dict, api_config: dict) -> list[dict
         scored.append(job)
 
         if (i + 1) % 10 == 0:
-            log.info("    Scored %d/%d jobs...", i + 1, len(jobs))
+            log.info("    Scored %d/%d jobs...", i + 1, len(relevant_jobs))
 
+    scored.extend(skipped)
     return scored

@@ -129,7 +129,7 @@ def get_applied_urls(api_config: dict) -> set[str]:
 
     try:
         sheet = _get_sheet(api_config)
-        ws = sheet.sheet1
+        ws = sheet.worksheet("Jobs")
         records = ws.get_all_records()
         return {
             r["URL"]
